@@ -226,12 +226,12 @@ class Boids:
             new_vertices = self.get_triangle_vertices(pos, vel, 0.15)
             self.boids[i]["shape"].set_xy(new_vertices)
 
-        for circle in self.group_circles:
+        for circle in self.group_circles: # clear each frame or they are left behind
             circle.remove()
         self.group_circles.clear()
         
         for pos in group_averages:
-            if pos is None:
+            if pos is None: # ignore single boids (groups set to None)
                 continue
             circle = Circle((pos[0], pos[1]), 0.1, fc='blue', alpha=0.6, zorder=2)
             self.ax.add_patch(circle)
