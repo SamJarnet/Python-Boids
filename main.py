@@ -1,7 +1,7 @@
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation 
 import numpy as np
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Polygon
 import random
 
 class Boids:
@@ -20,9 +20,12 @@ class Boids:
         self.group_circles = []
         self.boids = []
         for i in range(0, 10):
-            self.boids.append({"shape": Circle((5, -5), 0.1, fc='black', zorder=3),"pos": np.array([self.x_width//2 + i, self.y_width//2]), "vel": np.array([random.randint(1, 3)/3, random.randint(1, 3)/3])})
+            vertices = np.array([[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]])
+            triangle = Polygon(vertices.tolist(), fc='black', zorder=3)
+            self.boids.append({"shape": triangle,"pos": np.array([self.x_width//2 + i, self.y_width//2]), "vel": np.array([random.randint(1, 3)/3, random.randint(1, 3)/3])})
 
         self.dt = 0.1
+        self.group_radius = 1
         self.cohesion_strength = 0.1
  
 
@@ -47,8 +50,8 @@ class Boids:
     def find_groups(self):
         self.adjacency_list = {}
         for i in range(0, len(self.boids)):
-            self.boids[i]["shape"].set_facecolor('black') #reset each frame
-            self.adjacency_list[i] = [] #reset adjacency list
+            self.boids[i]["shape"].set_facecolor('black') # muts be reset to stop boids staying red when leaving group
+            self.adjacency_list[i] = [] 
 
         for i in range(0, len(self.boids)):
             for j in range(i+1, len(self.boids)):
@@ -57,7 +60,7 @@ class Boids:
                 displacement = pos_i - pos_j
                 mod_r = np.linalg.norm(displacement)
 
-                if mod_r < 1:
+                if mod_r < self.group_radius:  # group radius limit can be adjusted
                     self.adjacency_list[i].append(j)
                     self.adjacency_list[j].append(i)
                     self.boids[i]["shape"].set_facecolor('red')
@@ -75,7 +78,7 @@ class Boids:
             current_group = []
             groups.append(current_group)
             
-            search = [i]
+            search = [i] # search all neighbours of each group member
             while len(search) > 0:
                 current_boid = search.pop(0)
                 
@@ -91,12 +94,36 @@ class Boids:
     def find_average_pos(self, groups):
         group_positions = []
         
-        for group in groups:
-            if len(group) <= 1:
+        for group in groups: 
+            if len(group) <= 1: # filter out boids not in groups
                 group_positions.append(None)
                 continue
+
             sum_x, sum_y = 0.0, 0.0
             group_count = len(group)
+
+            if len(group) > 1:
+                for boid in group:
+                    sum_x += self.boids[boid]["pos"][0]
+                    sum_y += self.boids[boid]["pos"][1]
+                    
+                avg_x = sum_x / group_count
+                avg_y = sum_y / group_count
+                group_positions.append(np.array([avg_x, avg_y]))
+
+        return group_positions
+    
+    def find_average_alignment(self, groups):
+        group_positions = []
+        
+        for group in groups: 
+            if len(group) <= 1: # filter out boids not in groups
+                group_positions.append(None)
+                continue
+
+            sum_x, sum_y = 0.0, 0.0
+            group_count = len(group)
+
             if len(group) > 1:
                 for boid in group:
                     sum_x += self.boids[boid]["pos"][0]
@@ -115,29 +142,47 @@ class Boids:
             if boid in group:
                 if centers[i] is None:
                     return np.array([0.0, 0.0])
-                difference = np.array(centers[i] - self.boids[boid]["pos"])
+                difference = np.array(centers[i] - self.boids[boid]["pos"]) # get vector in direction of average point
                 return (difference * self.cohesion_strength)
             
+        return np.array([0.0, 0.0])
+    
+    def alignment(self, groups, centers, boid):
         return np.array([0.0, 0.0])
 
     def step(self):
         self.check_boundaries()
         groups = self.find_groups()
-        group_averages = self.find_average_pos(groups)
+        group_avg_pos = self.find_average_pos(groups)
+        group_avg_align = self.find_average_alignment(groups)
         for i in range(0, len(self.boids)):
-            cohesion_force = self.cohesion(groups, group_averages, i)
-            self.boids[i]["vel"] += cohesion_force
+            cohesion_force = self.cohesion(groups, group_avg_pos, i)
+            allignment_force = self.alignment(groups, group_avg_align, i)
+            self.boids[i]["vel"] += cohesion_force 
             self.boids[i]["pos"] += self.boids[i]["vel"] * self.dt
 
-        return group_averages
+        return group_avg_pos
     
-
+    def get_triangle_vertices(self, pos, vel, size):
+        angle = np.arctan2(vel[1], vel[0])
+        
+        vertices = np.array([[size, 0.0],[-size, -size / 1.5],[-size, size / 1.5]])
+        
+        cos, sin = np.cos(angle), np.sin(angle)
+        rotation= np.array([[cos, -sin],[sin, cos]]) # rotation matrix
+        
+        new_vertices = np.dot(vertices, rotation.T) + pos # rotate the vertices + shift pos
+        return new_vertices
 
     def animate(self, j):
         group_averages = self.step()
 
         for i in range(0, len(self.boids)):
-            self.boids[i]["shape"].center = self.boids[i]["pos"]
+            pos = self.boids[i]["pos"]
+            vel = self.boids[i]["vel"]
+            
+            new_vertices = self.get_triangle_vertices(pos, vel, 0.15)
+            self.boids[i]["shape"].set_xy(new_vertices)
 
         for circle in self.group_circles:
             circle.remove()
