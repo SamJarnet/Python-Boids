@@ -27,7 +27,7 @@ class Boids:
         self.dt = 0.1
         self.group_radius = 1
         self.cohesion_strength = 0.1
- 
+        self.seperation_strength = 0.025
 
     def init(self):
         for i in range(0, len(self.boids)):
@@ -113,27 +113,6 @@ class Boids:
 
         return group_positions
     
-    def find_average_alignment(self, groups):
-        group_positions = []
-        
-        for group in groups: 
-            if len(group) <= 1: # filter out boids not in groups
-                group_positions.append(None)
-                continue
-
-            sum_x, sum_y = 0.0, 0.0
-            group_count = len(group)
-
-            if len(group) > 1:
-                for boid in group:
-                    sum_x += self.boids[boid]["pos"][0]
-                    sum_y += self.boids[boid]["pos"][1]
-                    
-                avg_x = sum_x / group_count
-                avg_y = sum_y / group_count
-                group_positions.append(np.array([avg_x, avg_y]))
-
-        return group_positions
 
     def cohesion(self, groups, centers, boid):
 
@@ -147,18 +126,27 @@ class Boids:
             
         return np.array([0.0, 0.0])
     
-    def alignment(self, groups, centers, boid):
+    def seperation(self, groups, boid):
+        for group in groups:
+            if boid in group and len(group) > 1:
+                vec = np.array([0.0, 0.0])
+                for boid_id in group:
+                    if boid_id != boid:
+                        displacement = self.boids[boid]["pos"] - self.boids[boid_id]["pos"]
+                        mod_r = np.linalg.norm(displacement)
+                        if 0 < mod_r < 1:
+                            vec += displacement / mod_r
+                return vec * self.seperation_strength
         return np.array([0.0, 0.0])
 
     def step(self):
         self.check_boundaries()
         groups = self.find_groups()
         group_avg_pos = self.find_average_pos(groups)
-        group_avg_align = self.find_average_alignment(groups)
         for i in range(0, len(self.boids)):
             cohesion_force = self.cohesion(groups, group_avg_pos, i)
-            allignment_force = self.alignment(groups, group_avg_align, i)
-            self.boids[i]["vel"] += cohesion_force 
+            seperation_force = self.seperation(groups, i)
+            self.boids[i]["vel"] += cohesion_force + seperation_force
             self.boids[i]["pos"] += self.boids[i]["vel"] * self.dt
 
         return group_avg_pos
