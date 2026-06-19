@@ -31,6 +31,7 @@ class Boids:
         self.cohesion_strength = 0.134
         self.seperation_strength = 0.045
         self.alignment_strength = 0.038
+        self.max_vel = 1
 
         self.setup_widgets()
 
@@ -181,8 +182,11 @@ class Boids:
             
         return np.array([0.0, 0.0])
     
-    def cap_speed(self):
-        pass
+    def cap_speed(self, i):
+        boid_vel = self.boids[i]["vel"]
+        mag_vel = np.linalg.norm(boid_vel)
+        if  mag_vel > self.max_vel:
+            self.boids[i]["vel"] = (boid_vel/mag_vel) * self.max_vel
 
     def step(self):
         self.check_boundaries()
@@ -196,6 +200,7 @@ class Boids:
             alignment_force = self.allignment(groups, group_avg_vel, i)
 
             self.boids[i]["vel"] += cohesion_force + seperation_force + alignment_force
+            self.cap_speed(i)
             self.boids[i]["pos"] += self.boids[i]["vel"] * self.dt
 
         return group_avg_pos
