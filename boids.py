@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib.patches import Circle, Polygon
 import random
 from matplotlib.widgets import Button, Slider
+from boids_bandit import ContextualBandit
 
 
 class Boids:
@@ -34,6 +35,9 @@ class Boids:
         self.max_vel = 1
 
         self.setup_widgets()
+
+        self.bandit = ContextualBandit(self)
+
 
     def setup_widgets(self):
         cohesion = plt.axes([0.08, 0.08, 0.2, 0.03]) # type: ignore
@@ -138,10 +142,19 @@ class Boids:
                 avg_x = sum_x / group_count
                 avg_y = sum_y / group_count
                 group_positions.append(np.array([avg_x, avg_y]))
-
         return group_positions
     
-    
+    def find_distances(self):
+        distances = []
+        boid_count = len(self.boids)
+        for i in range(0, boid_count):
+            for j in range(i + 1, boid_count):
+                    displacement = self.boids[i]["pos"] - self.boids[j]["pos"]  
+                    distances.append( np.linalg.norm(displacement))  # vector to each other boid
+        if len(distances) == 0:
+            return 0.0
+        return sum(distances)/len(distances)
+
 
     def cohesion(self, groups, centers, boid):
         for i, group in enumerate(groups):
@@ -162,7 +175,7 @@ class Boids:
                 for boid_id in group:
                     if boid_id != boid:
                         displacement = self.boids[boid]["pos"] - self.boids[boid_id]["pos"]  
-                        mod_r = np.linalg.norm(displacement)  # direction to each other boid
+                        mod_r = np.linalg.norm(displacement)  # vector to each other boid
 
                         if 0 < mod_r < 1:
                             vec += displacement / mod_r  
@@ -172,6 +185,7 @@ class Boids:
     
 
     def allignment(self, groups, avg_vels, boid):
+        
         for i, group in enumerate(groups):
             if boid in group:
                 if avg_vels[i] is None:
@@ -193,7 +207,6 @@ class Boids:
         groups = self.find_groups()
         group_avg_pos = self.find_average(groups, "pos")
         group_avg_vel = self.find_average(groups, "vel")
-
         for i in range(0, len(self.boids)):
             cohesion_force = self.cohesion(groups, group_avg_pos, i)
             seperation_force = self.seperation(groups, i)
@@ -217,7 +230,15 @@ class Boids:
         return new_vertices
 
     def animate(self, j):
+
+        context = self.bandit.get_context()
+        dist_before = self.find_distances()
+        action = self.bandit.thomson_sample(context)
+        self.bandit.pull(action)
+
         group_averages = self.step()
+        dist_after = self.find_distances()
+        self.bandit.update(context, action, dist_before, dist_after)
 
         for i in range(0, len(self.boids)):
             pos = self.boids[i]["pos"]
