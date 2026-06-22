@@ -38,6 +38,12 @@ class Boids:
 
         self.bandit = ContextualBandit(self)
 
+        self.bandit_K = 20
+        self.bandit_window = []
+        self.pending_action = None
+        self.pending_context = None
+        self.dist_before_window = None
+
 
     def setup_widgets(self):
         cohesion = plt.axes([0.08, 0.08, 0.2, 0.03]) # type: ignore
@@ -230,15 +236,20 @@ class Boids:
         return new_vertices
 
     def animate(self, j):
+        # change the values less often
+        if j % self.bandit_K == 0:
+            if self.pending_action is not None:
+                dist_after = sum(self.bandit_window) / len(self.bandit_window)
+                self.bandit.update(self.pending_context, self.pending_action, self.dist_before_window, dist_after)
 
-        context = self.bandit.get_context()
-        dist_before = self.find_distances()
-        action = self.bandit.thomson_sample(context)
-        self.bandit.pull(action)
+            self.pending_context = self.bandit.get_context()
+            self.dist_before_window = self.find_distances()
+            self.pending_action = self.bandit.thomson_sample(self.pending_context)
+            self.bandit.pull(self.pending_action)
+            self.bandit_window = []
 
         group_averages = self.step()
-        dist_after = self.find_distances()
-        self.bandit.update(context, action, dist_before, dist_after)
+        self.bandit_window.append(self.find_distances())
 
         for i in range(0, len(self.boids)):
             pos = self.boids[i]["pos"]
