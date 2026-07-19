@@ -4,7 +4,7 @@ import numpy as np
 from matplotlib.patches import Circle, Polygon
 import random
 from matplotlib.widgets import Button, Slider
-from boids_bandit import ContextualBandit
+from python_boids.boids_bandit import ContextualBandit
 
 
 class Boids:

@@ -10,16 +10,16 @@ int main(int argc, char* argv[]) {
 
     SDL_Window *window;                    // Declare a pointer
 
-    int width = 640;
-    int height = 480;
+    int width = 1920;
+    int height = 1080;
 
     SDL_Init(SDL_INIT_VIDEO);              // Initialize SDL3
 
     // Create an application window with the following settings:
     window = SDL_CreateWindow(
         "An SDL3 window",                  // window title
-        640,                               // width, in pixels
-        480,                               // height, in pixels
+        width,                               // width, in pixels
+        height,                               // height, in pixels
         SDL_WINDOW_OPENGL                  // flags - see below
     );
 
@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
     bool done = false;
     float speed = 5.0f;
 
-    int boid_count = 10;
+    int boid_count = 150;
 
     
 
@@ -65,41 +65,66 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+
         // Do game logic, present a frame, etc.
 
         Uint64 now = SDL_GetPerformanceCounter();
         float dt = 1 * (float)(now - last) / SDL_GetPerformanceFrequency();
         last = now;
-        float max_speed = 150.0f; // Maximum pixels per second
-        // Group *groups = find_groups(boid_arr, boid_count);
+        float group_radius = 80.0f;
+        float max_speed = 200.0f;
+        float cohesion_strength = 0.5f;
+        float separation_strength = 150.0f;
+        float alignment_strength = 1.5f;
 
+        Group groups[MAX_BOIDS];
+        int total_groups = find_groups(boid_arr, boid_count, group_radius, groups);
 
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-        SDL_RenderClear(renderer);
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        
+        for (int g = 0; g < total_groups; g++) {
+            Group current_group = groups[g];
 
-        for(int i = 0; i<boid_count; i++){
-            
-            check_boundaries(&boid_arr[i], width, height);
+            Vector2 avg_pos = find_average_pos(boid_arr, &current_group);
+            Vector2 avg_vel = find_average_vel(boid_arr, &current_group);
 
-            Vector2 avg_pos = find_average_pos(boid_arr, boid_count);
-            Vector2 avg_vel = find_average_vel(boid_arr, boid_count);
+            for (int m = 0; m < current_group.count; m++) {
+                int boid_id = current_group.members[m];
 
-            Vector2 separation_force = separation(boid_arr, boid_count, i);            
-            Vector2 cohesion_force = cohesion(boid_arr, i, avg_pos);
-            Vector2 alignment_force = alignment(boid_arr, i, avg_vel);
+                check_boundaries(&boid_arr[boid_id], width, height);
 
-            Vector2 total_force = vector_add(vector_add(separation_force, cohesion_force), alignment_force);
+                Vector2 separation_force = separation(boid_arr, &current_group, m, separation_strength);            
+                Vector2 cohesion_force = cohesion(boid_arr, &current_group, m, avg_pos, cohesion_strength);
+                Vector2 alignment_force = alignment(boid_arr, &current_group, m, avg_vel, alignment_strength);
 
-            
-            boid_update(&boid_arr[i], total_force, dt);
-            float current_speed = vector_length(boid_arr[i].velocity);
-            if (current_speed > max_speed) {
-                boid_arr[i].velocity = vector_multiply(vector_normalize(boid_arr[i].velocity), max_speed);
-}
-            
+                Vector2 total_force = vector_add(vector_add(separation_force, cohesion_force), alignment_force);
+                
+                boid_update(&boid_arr[boid_id], total_force, dt);
 
-            SDL_RenderPoint(renderer, (int)boid_arr[i].position.x, (int)boid_arr[i].position.y);
+                // Speed Capping
+                float current_speed = vector_length(boid_arr[boid_id].velocity);
+                if (current_speed > max_speed) {
+                    boid_arr[boid_id].velocity = vector_multiply(vector_normalize(boid_arr[boid_id].velocity), max_speed);
+                }
+            }
+        }
+
+        float boid_size = 6.0f; 
+        for (int i = 0; i < boid_count; i++) {
+            SDL_FRect boid_rect = {
+                .x = boid_arr[i].position.x - (boid_size / 2.0f), 
+                .y = boid_arr[i].position.y - (boid_size / 2.0f),
+                .w = boid_size,
+                .h = boid_size
+            };
+            if (boid_arr[i].is_grouped) {
+                SDL_SetRenderDrawColor(renderer, 255, 50, 50, 255);
+            } else {
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+            }
+            SDL_RenderFillRects(renderer, &boid_rect, 1);
         }
 
 
